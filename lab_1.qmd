@@ -1,0 +1,345 @@
+---
+title: "Lab 1"
+author: "Andrew Steinkruger"
+format: html
+editor: visual
+---
+
+This document completes Lab 1 in GEOG 565.
+
+Remember to add nice symbolic notation for expressions in 2, 3, 4.
+
+```{r preliminaries, message = FALSE}
+
+library(tidyverse)
+library(gt)
+
+dat = "data/geog565_lab1_data.csv" %>% read_csv
+
+vec_1 = dat$precip
+vec_2 = dat$streamflow
+
+vec_1_1 = vec_1[1:480]
+vec_1_2 = vec_1[481:649]
+vec_1_3 = vec_1[650:961]
+vec_1_4 = vec_1[962:1465]
+
+vec_2_1 = vec_2[1:480]
+vec_2_2 = vec_2[481:649]
+vec_2_3 = vec_2[650:961]
+vec_2_4 = vec_2[962:1465]
+
+vec_string = c("Dec 1-Dec 20", "Dec 21-Dec 27", "Dec 28-Jan 10", "Jan 11-Jan 31")
+
+```
+
+**1.**
+
+```{r 1}
+
+dat = dat %>% mutate(time = row_number())
+
+dat %>% 
+  pivot_longer(cols = c(precip, streamflow),
+               values_to = "value",
+               names_to = "variable") %>% 
+  ggplot() +
+  geom_point(aes(x = time,
+                 y = value,
+                 color = variable),
+             alpha = 0.50) +
+  labs(x = "Hour (From December 1)", y = "Value", color = "Variable") +
+  theme_minimal()
+
+```
+
+**2.**
+
+a.  We can observe temporal autocorrelation in both variables: for each observation, the value is closer to that of the preceding and following observations than another random observation or the mean of all other observations. That is, values for streamflow observations are more similar to those of other observations that are closer rather than further in time, and the same is true for precipitation.
+
+    Borrowing from slides, the distances between streamflow values over time suggest local variances at a distance of 1 time unit vary systematically from global variance pooled at all distances.
+
+b.  Let Y_t be streamflow observed at time t in 1, 1465. Let n in Z be a lag in time. Then autocorrelation means Y_t = f(Y_t-n).
+
+c.  We have that semivariance, lag covariance, and lag correlation measure autocorrelation.
+
+**3.**
+
+a.  We can observe a weak correlation between precipitation and streamflow.
+
+b.  Let t in 1, 1465 be time. Let X_t be precipitation Y_t be streamflow observed at t. Then correlation can be interpreted as Y_t = f(X_t). We might note that the inverse, X_t = g(Y_t) where g() inverts f(), is a misleading interpretation for this example.
+
+c.  We have that covariance and correlation measure correlation.
+
+**4.**
+
+a.  We can observe strong cross-correlation between precipitation and streamflow, in the sense that changes in streamflow follow changes in precipitation on a lag in time.
+
+b.  Let t in 1, 1465 be time. Let n in Z be a lag in time. Let n in Let X_t be precipitation and Y_t be streamflow observed at t. Then cross-correlation can be interpreted as Y_t = f(X_t-n). This is equivalent to Y_t+n = f(X_t).
+
+c.  We have that cross-covariance and cross-correlation measure cross-correlation.
+
+**5.**
+
+a.  
+
+```{r 5a}
+
+val_5a_precip = vec_1 %>% var %>% round(2)
+val_5a_stream = vec_2 %>% var %>% round(2)
+
+```
+
+The variance of precipitation is `{r} val_5a_precip`.
+
+The variance of streamflow is `{r} val_5a_stream`.
+
+b.  
+
+```{r 5b}
+
+val_5b_precip = vec_1 %>% sd %>% round(2)
+val_5b_stream = vec_2 %>% sd %>% round(2)
+
+```
+
+The standard deviation of precipitation is `{r} val_5b_precip`.
+
+The standard deviation of streamflow is `{r} val_5b_stream`.
+
+c.  
+
+```{r 5c}
+
+val_5c_precip = vec_1 %>% mean %>% round(2)
+val_5c_stream = vec_2 %>% mean %>% round(2) 
+
+```
+
+The mean of precipitation is `{r} val_5c_precip`.
+
+The mean of streamflow is `{r} val_5c_stream`.
+
+d.  
+
+```{r 5d}
+
+val_5d_precip = ((vec_1 %>% sd) / (vec_1 %>% mean)) %>% round(2)
+val_5d_stream = ((vec_2 %>% sd) / (vec_2 %>% mean)) %>% round(2)
+
+```
+
+The coefficient of variation for precipitation is `{r} val_5d_precip`.
+
+The coefficient of variation for streamflow is `{r} val_5d_stream`.
+
+e.  Variance is calculated from mean deviations, so it is centered by definition.
+
+f.  Variance is expressed in the squared units of the underlying distribution (e.g. squared unit volume per squared unit time for streamflow), so it is non-normalized by definition.
+
+g.  The coefficient of variation is normalized, so we can compare the two variables. CV for precipitation is greater than that of streamflow, so precipitation has more variation. Someone watching a creek through a rainstorm might intuit the same result.
+
+**6.**
+
+```{r 6}
+
+dat_6 = 
+  tibble('Time Period' = vec_string,
+         Correlation = 
+           c(cor(vec_1_1, vec_2_1) %>% round(2),
+             cor(vec_1_2, vec_2_2) %>% round(2),
+             cor(vec_1_3, vec_2_3) %>% round(2),
+             cor(vec_1_4, vec_2_4) %>% round(2)))
+
+dat_6 %>% gt
+
+```
+
+In the first three periods, precipitation and streamflow exhibit weak positive correlations. In the fourth and final period, precipitation and streamflow exhibit a weak negative correlation. Eyeballing the plot in (1), these correlations follow from the lagged relationship between the two variables. In the first three periods, precipitation events happen to lend themselves to a spurious positive correlation, while in the fourth period that relationship falls apart because (almost) no further precipitation events occur.
+
+Values differ among time periods; as above, this is because precipitation almost stops after hour 1,000.
+
+**7.**
+
+a.  
+
+```{r 7a}
+
+ccf(vec_1_1, vec_2_1, lag.max = 24, main = vec_string[1], ylab = "Cross-Correlation")
+ccf(vec_1_2, vec_2_2, lag.max = 24, main = vec_string[2], ylab = "Cross-Correlation")
+ccf(vec_1_3, vec_2_3, lag.max = 24, main = vec_string[3], ylab = "Cross-Correlation")
+ccf(vec_1_4, vec_2_4, lag.max = 24, main = vec_string[4], ylab = "Cross-Correlation")
+
+```
+
+b.  
+
+```{r 7b}
+
+dat_7 = 
+  tibble('Lag (Hours)' = c(1, 3, 6, 12, 24),
+         'Dec 1-Dec 20' = 
+           ccf(vec_1_1, 
+               vec_2_1, 
+               lag.max = 24, 
+               plot = FALSE)
+         [[1]][c(24, 22, 19, 13, 1)] %>% 
+           round(2),
+         'Dec 21-Dec 27' = 
+           ccf(vec_1_2, 
+               vec_2_2, 
+               lag.max = 24, 
+               plot = FALSE)
+         [[1]][c(24, 22, 19, 13, 1)] %>% 
+           round(2),
+         'Dec 28-Jan 10' = 
+           ccf(vec_1_3, 
+               vec_2_3, 
+               lag.max = 24, 
+               plot = FALSE)
+         [[1]][c(24, 22, 19, 13, 1)] %>% 
+           round(2),
+         'Jan 11-31' = 
+           ccf(vec_1_4, 
+               vec_2_4, 
+               lag.max = 24, 
+               plot = FALSE)
+         [[1]][c(24, 22, 19, 13, 1)] %>% 
+           round(2))
+
+dat_7 %>% 
+  gt %>% 
+  tab_spanner(label = "Cross-Correlation", 
+              columns = 
+                c('Dec 1-Dec 20',
+                  'Dec 21-Dec 27',
+                  'Dec 28-Jan 10',
+                  'Jan 11-31'))
+
+```
+
+c.  The plots suggest that, for the first three periods, the cross-correlation of precipitation and streamflow increases up to a maximum at a lag between 0 and 11 hours, then decreases as the lag becomes a lead and increases. This matches the intuitive notion of a waterway picking up in flow as its watershed collects precipitation over time; the period of 0-11 hours reflects the spatial scale (and slope, among other characteristics) of this particular waterway and watershed. In the fourth period, with little additional precipitation and a larger-scale trend of decreasing streamflow following a seasonal maximum, the cross-correlation is uninformative.
+
+**8.**
+
+a.  
+
+```{r 8a}
+
+fun_acf = function(vec, label){
+  
+  plot(acf(vec, lag.max = 24, plot = FALSE),
+       type = "l",
+       col = "blue",
+       ylab = "Autocorrelation",
+       main = label) 
+  
+}
+
+fun_acf(vec_1_1, label = "Precipitation (Dec 1-Dec 20)")
+fun_acf(vec_1_2, label = "Precipitation (Dec 21-Dec 27)")
+fun_acf(vec_1_3, label = "Precipitation (Dec 28-Jan 10)")
+fun_acf(vec_1_4, label = "Precipitation (Jan 11-Jan 31)")
+
+fun_acf(vec_2_1, label = "Streamflow (Dec 1-Dec 20)")
+fun_acf(vec_2_2, label = "Streamflow (Dec 21-Dec 27)")
+fun_acf(vec_2_3, label = "Streamflow (Dec 28-Jan 10)")
+fun_acf(vec_2_4, label = "Streamflow (Jan 11-Jan 31)")
+
+```
+
+b.  
+
+```{r 8b1}
+
+dat_8b1 = 
+  tibble('Lag (Hours)' = c(1, 3, 6, 12, 24),
+         'Dec 1-Dec 20' = 
+           acf(vec_1_1, 
+               lag.max = 24, 
+               plot = FALSE)
+         [[1]][c(24, 22, 19, 13, 1)] %>% 
+           round(2),
+         'Dec 21-Dec 27' = 
+           acf(vec_1_2, 
+               lag.max = 24, 
+               plot = FALSE)
+         [[1]][c(24, 22, 19, 13, 1)] %>% 
+           round(2),
+         'Dec 28-Jan 10' = 
+           acf(vec_1_3, 
+               lag.max = 24, 
+               plot = FALSE)
+         [[1]][c(24, 22, 19, 13, 1)] %>% 
+           round(2),
+         'Jan 11-31' = 
+           acf(vec_1_4, 
+               lag.max = 24, 
+               plot = FALSE)
+         [[1]][c(24, 22, 19, 13, 1)] %>% 
+           round(2))
+
+dat_8b1 %>% 
+  gt %>% 
+  tab_spanner(label = "Precipitation Autocorrelation", 
+              columns = 
+                c('Dec 1-Dec 20',
+                  'Dec 21-Dec 27',
+                  'Dec 28-Jan 10',
+                  'Jan 11-31'))
+
+```
+
+```{r 8b2}
+
+dat_8b2 = 
+  tibble('Lag (Hours)' = c(1, 3, 6, 12, 24),
+         'Dec 1-Dec 20' = 
+           acf(vec_2_1, 
+               lag.max = 24, 
+               plot = FALSE)
+         [[1]][c(24, 22, 19, 13, 1)] %>% 
+           round(2),
+         'Dec 21-Dec 27' = 
+           acf(vec_2_2, 
+               lag.max = 24, 
+               plot = FALSE)
+         [[1]][c(24, 22, 19, 13, 1)] %>% 
+           round(2),
+         'Dec 28-Jan 10' = 
+           acf(vec_2_3, 
+               lag.max = 24, 
+               plot = FALSE)
+         [[1]][c(24, 22, 19, 13, 1)] %>% 
+           round(2),
+         'Jan 11-31' = 
+           acf(vec_2_4, 
+               lag.max = 24, 
+               plot = FALSE)
+         [[1]][c(24, 22, 19, 13, 1)] %>% 
+           round(2))
+
+dat_8b2 %>% 
+  gt %>% 
+  tab_spanner(label = "Streamflow Autocorrelation", 
+              columns = 
+                c('Dec 1-Dec 20',
+                  'Dec 21-Dec 27',
+                  'Dec 28-Jan 10',
+                  'Jan 11-31'))
+
+```
+
+**9.**
+
+a.  Words.
+
+b.  Words.
+
+c.  Words.
+
+d.  Words.
+
+**10.**
+
+Sentence. Autocorrelation. Correlation. Cross-correlation. Concluding comment on modeling.
