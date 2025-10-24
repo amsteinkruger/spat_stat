@@ -1,0 +1,441 @@
+---
+title: "Lab 2 | GEOG 565"
+author: "Andrew Steinkruger"
+format: html
+editor: visual
+---
+
+```{r}
+
+1 + 1
+
+```
+
+Words.
+
+```{r reference}
+
+library(dismo)
+library(gstat)
+library(RColorBrewer)
+library(sf)
+library(deldir)
+library(fields)
+library(landscapemetrics)
+library(signal)
+library(tmap)
+library(lwgeom)
+library(concaveman)
+
+obs <- st_read("data/gis/observations.shp")
+dem <- raster("data/gis/hires.tif")
+
+# This is a blank DEM we'll use throughout this lab
+r <- raster(dem) 
+
+# Define and set all layers to the same projection
+obs <- st_transform(obs, crs = 5070)
+#st_crs(obs) <- 5070
+
+target_crs <- "EPSG:5070"
+
+# Reproject the rasters
+dem <- projectRaster(dem, crs = target_crs)
+r <- projectRaster(r, crs = target_crs)
+
+# Plot the points and DEM
+plot(dem, col=grey(1:100/100))
+plot(obs, type = "p", pch = 16, cex = 0.6, col = "red", add = TRUE)
+
+# Perform the rasterization
+
+# Drop Z/M from geometry
+obs <- st_zm(obs)
+
+# Convert to sp for rasterize
+obs_sp <- as(obs, "Spatial")
+obs_sp <- sp::SpatialPointsDataFrame(obs_sp, data = as.data.frame(obs))
+
+# Rasterize
+obs.r <- rasterize(x = obs_sp, r, field = 'Elevation', update = TRUE)
+
+# setting CRS again to be sure
+crs(obs.r) <- crs(dem)
+
+# make function to compute RMSE
+RMSE <- function(observed, predicted) {  
+  sqrt(mean((predicted - observed)^2, na.rm = TRUE))
+}
+
+# Create the null model
+mean_elevation = mean(obs$Elevation)
+null <- RMSE(mean_elevation, obs$Elevation)
+
+#######################################
+####          VORONOI              ####        
+#######################################
+
+# Create the Voronoi diagram
+
+# Convert sf to sp
+obs_sp <- as(obs, "Spatial")
+
+# create Voronoi
+v <- voronoi(obs_sp)
+tin <- rasterize(v, obs.r, 'Elevation')
+plot(tin, col=grey(1:100/100))
+
+kf <- kfold(nrow(obs))
+rmse <- rep(NA, 5)
+
+for (k in 1:5) {  
+  test <- obs[kf == k, ]  
+  train <- obs[kf != k, ]
+  
+  # Convert to sp for compatibility
+  train_sp <- as(train, "Spatial")
+  test_sp  <- as(test, "Spatial")
+  
+  # Create Voronoi
+  v <- voronoi(train_sp)
+  
+  # Extract predictions
+  p <- extract(v, test_sp)
+  
+  # Compute RMSE
+  rmse[k] <- RMSE(test$Elevation, p$Elevation)
+}
+
+print(paste("Voronoi RMSE for each fold:", rmse))
+print(paste("Voronoi vs. Null model:", mean(rmse) - null))
+
+#######################################
+####  INVERSE DISTANCE WEIGHTING   ####        
+#######################################
+
+# Create the inverse distance weighting model
+idm <- gstat(formula = Elevation~1, locations = obs)
+idw <- interpolate(object = obs.r, model = idm)
+plot(idw, col=grey(1:100/100))
+
+#####################################
+####          SPLINE             ####        
+#####################################
+
+# Create the thinplate spline model
+m <- Tps(st_coordinates(obs), obs$Elevation)
+tps <- interpolate(object = obs.r, model = m)
+plot(tps, col=grey(1:100/100))
+
+#####################################
+####          KRIGING            ####        
+#####################################
+
+# Generate the spatial grid file
+r <- raster(dem)
+g <- as(r, 'SpatialGrid')
+proj4string(g) <- CRS("+init=EPSG:5070")
+
+# Construct the variogram
+# The width argument sets the variogram distance
+gs <- gstat(formula = Elevation ~ 1, locations = obs)
+v <- variogram(gs, width = 10) 
+plot(v)
+
+# Build a base gstat object for the variable
+gs <- gstat(formula = Elevation ~ 1, locations = obs)
+
+# Compute the empirical variogram (adjust width as needed)
+v <- variogram(gs, width = 10)
+plot(v, main = "Empirical Variogram")
+
+# Fit a theoretical model to the variogram
+# vgm(psill, model, range, nugget)
+fve <- fit.variogram(v, vgm(psill = 2100, model = "Gau", range = 600, nugget = 0))
+
+# Check the fit visually
+plot(v, fve, main = "Fitted Variogram Model")
+
+# Construct the Kriging model
+k  <- gstat(formula = Elevation ~ 1, locations = obs, model = fve, nmax=25, maxdist=250)
+kp <- predict(k, g)
+ok <- brick(kp)
+names(ok) <- c('estimate','variance')
+plot(ok[[1]], col = grey(1:100/100), main = "Kriging Estimate")
+
+
+# Ensure your observations are simple POINTS (no Z/M)
+obs_pts <- st_collection_extract(st_zm(obs), "POINT")
+
+# Build the concave hull around all observation points
+# concavity controls how tight the hull hugs the points (1.5–2.5 typical)
+hull_concave <- concaveman(obs_pts, concavity = 2)
+
+# Match CRS to DEM and create Spatial version for masking
+hull_concave <- st_transform(hull_concave, st_crs(dem))
+hull_sp <- as(hull_concave, "Spatial")
+
+tin_mask <- mask(crop(tin, hull_sp), hull_sp)
+plot(tin_mask, col = grey(1:100/100), main = "Voronoi (masked to observed area)")
+plot(hull_concave, add = TRUE, border = "red", lwd = 2)
+
+idw_mask <- mask(crop(idw, hull_sp), hull_sp)
+plot(idw_mask, col = grey(1:100/100), main = "IDW (masked to observed area)")
+plot(hull_concave, add = TRUE, border = "red", lwd = 2)
+
+tps_mask <- mask(crop(tps, hull_sp), hull_sp)
+plot(tps_mask, col = grey(1:100/100), main = "TPS (masked to observed area)")
+plot(hull_concave, add = TRUE, border = "red", lwd = 2)
+
+ok_est_mask <- mask(crop(ok[[1]], hull_sp), hull_sp)
+plot(ok_est_mask, col = grey(1:100/100), main = "Kriging Estimate (masked to observed area)")
+plot(hull_concave, add = TRUE, border = "red", lwd = 2)
+
+
+###################################
+####    MODEL EVALUTATION      ####
+###################################
+
+# Specify the number of folds and partition the datasets randomly
+nfolds <- 5
+
+# Set the Seed in R and randomize the folds
+set.seed(24)
+k <- kfold(obs, nfolds)
+
+# Initialize a bunch of vectors
+tpsrmse <- krigrmse <- idwrmse <- rep(NA, 5)
+
+# Loop over each of the folds
+for (i in 1:nfolds) { 
+  
+  # Get the training and testing set
+  test <- obs[k==i,]  
+  train <- obs[k!=i,]
+  
+  # Fit the IWD model
+  m <- gstat(formula=Elevation~1, locations=train)  
+  p1 <- predict(m, newdata=test, debug.level=0)$var1.pred  
+  idwrmse[i] <-  RMSE(test$Elevation, p1)  
+  
+  # Fit the Kriging model
+  m <- gstat(formula=Elevation~1, locations=train, model=fve, nmax=25, maxdist=250)  
+  p2 <- predict(m, newdata=test, debug.level=0)$var1.pred  
+  krigrmse[i] <-  RMSE(test$Elevation, p2)  
+  
+  # Fit the Thinplate spline model
+  m <- Tps(st_coordinates(train), train$Elevation)  
+  p3 <- predict(m, st_coordinates(test))  
+  tpsrmse[i] <-  RMSE(test$Elevation, p3)  
+  
+}
+
+# Get the average error
+rmi <- mean(idwrmse)
+rmk <- mean(krigrmse)
+rmt <- mean(tpsrmse)
+
+print(paste("Mean RMSE for each IDW:", rmi))
+print(paste("Mean RMSE for each Kriging:", rmk))
+print(paste("Mean RMSE for each TPS:", rmt))
+
+###################################
+####    LANDSCAPE FEATURES     ####
+###################################
+
+# Read in the shapefiles
+slopeAOI  <- st_read("data/gis/slopeAOI.shp")
+valleyAOI <- st_read("data/gis/valleyAOI.shp")
+slopeAOI <- st_transform(slopeAOI, crs = 5070)
+valleyAOI <- st_transform(valleyAOI, crs = 5070)
+
+# Plot the DEM with pts and the slope AOI
+plot(dem, col=grey(1:100/100))
+plot(obs, pch = 16, cex = 0.6, col = "red", add = TRUE)
+plot(slopeAOI,
+     add = TRUE,
+     border = "skyblue",                          # outline color
+     lwd = 2,                                     # thicker border
+     col = adjustcolor("skyblue", alpha.f = 0.2)) # transparent fil
+
+
+# Make 10 m contours from the DEM
+contours10 <- rasterToContour(dem, levels = seq(
+  floor(minValue(dem) / 10) * 10,
+  ceiling(maxValue(dem) / 10) * 10,
+  by = 10
+))
+
+# Plot DEM in grayscale
+plot(dem, col = grey(1:100/100), main = "DEM with 10 m Contours and Slope AOI")
+
+# Add contours (thin gray lines)
+plot(contours10, add = TRUE, col = "darkgrey", lwd = 0.7)
+
+# Add observation points
+plot(obs, pch = 16, cex = 0.6, col = "red", add = TRUE)
+
+# Add the Slope AOI polygon
+plot(slopeAOI,
+     add = TRUE,
+     border = "skyblue",
+     lwd = 2,
+     col = adjustcolor("skyblue", alpha.f = 0.2))
+
+# Get bounding box of the slope AOI
+aoi_bbox <- st_bbox(slopeAOI)
+
+# Plot DEM clipped to AOI extent
+plot(dem,
+     col = grey(1:100/100),
+     main = "DEM Zoomed to Slope AOI",
+     xlim = c(aoi_bbox["xmin"], aoi_bbox["xmax"]),
+     ylim = c(aoi_bbox["ymin"], aoi_bbox["ymax"]))
+
+# Add contours (thin gray lines)
+plot(contours10, add = TRUE, col = "darkgrey", lwd = 0.7)
+
+# Add observation points
+plot(obs, pch = 16, cex = 0.6, col = "red", add = TRUE)
+
+# Add slope AOI polygon
+plot(slopeAOI,
+     add = TRUE,
+     border = "skyblue",
+     lwd = 2,
+     col = adjustcolor("skyblue", alpha.f = 0.2))
+
+
+# Plot the DEM with pts and the valley AOI
+plot(dem, col=grey(1:100/100))
+plot(obs, pch = 16, cex = 0.6, col = "red", add = TRUE)
+plot(valleyAOI,
+     add = TRUE,
+     border = "skyblue",                          # outline color
+     lwd = 2,                                     # thicker border
+     col = adjustcolor("skyblue", alpha.f = 0.2)) # transparent fill
+
+# Create 10 m contour lines from the DEM
+contours10 <- rasterToContour(dem, levels = seq(
+  floor(minValue(dem) / 10) * 10,
+  ceiling(maxValue(dem) / 10) * 10,
+  by = 10
+))
+
+# Plot the DEM with points, AOI, and contours
+plot(dem, col = grey(1:100/100), main = "DEM with 10m Contours and Valley AOI")
+plot(contours10, add = TRUE, col = "darkgrey", lwd = 0.7)        # ← contours
+plot(obs, pch = 16, cex = 0.6, col = "red", add = TRUE)
+plot(valleyAOI,
+     add = TRUE,
+     border = "skyblue",
+     lwd = 2,
+     col = adjustcolor("skyblue", alpha.f = 0.2))
+
+# zooming in 
+valley_bbox <- st_bbox(valleyAOI)
+plot(dem,
+     col = grey(1:100/100),
+     main = "Valley AOI (10m Contours)",
+     xlim = c(valley_bbox["xmin"], valley_bbox["xmax"]),
+     ylim = c(valley_bbox["ymin"], valley_bbox["ymax"]))
+plot(contours10, add = TRUE, col = "darkgrey", lwd = 0.7)
+plot(obs, pch = 16, cex = 0.6, col = "red", add = TRUE)
+plot(valleyAOI, add = TRUE, border = "skyblue", lwd = 2,
+     col = adjustcolor("skyblue", alpha.f = 0.2))
+
+######################################
+####    Smoothing -- Dataset 1    ####
+######################################
+
+# Load in the temperature data
+temp.data <- read.csv("data/csvs/pri4_smoothing.csv")
+plot(temp.data$meantemp, type='l', ylab = "mean temp")
+
+# Load in the smoothing coefficients
+ma12 <- c(rep(1,13))/13
+ma24 <- c(rep(1,25))/25
+
+# Run the smoothing (despite the function name being called filter)
+sd.ma12 <- stats::filter(temp.data, ma12, method = "convolution", sides = 2)
+sd.ma24 <- stats::filter(temp.data, ma24, method = "convolution", sides = 2)
+
+# Plot the smooth data for the temperature dataset
+layout(matrix(1:3, 3,1))
+plot(temp.data$meantemp, type = "l", main = "Original Data", ylab = "mean temp")
+plot(sd.ma12[,2], main = "13-Point Moving Average Filter")
+plot(sd.ma24[,2], main = "25-Point Moving Average Filter")
+
+#######################################
+####    Smoothing  -- Dataset 2    ####
+#######################################
+
+# Load in the elevation data
+elev.data <- read.csv("data/csvs/will-cascade_transect-data.csv")
+plot(elev.data$Elevation..m., type='l')
+
+# Load in the smoothing coefficients
+ma12 <- c(rep(1,317))/317
+ma24 <- c(rep(1,635))/635
+
+# Run the smoothing (despite the function name being called filter)
+sd.ma12 <- stats::filter(elev.data, ma12, method = "convolution", sides = 2)
+sd.ma24 <- stats::filter(elev.data, ma24, method = "convolution", sides = 2)
+
+# Plot the smooth data for the elevation dataset
+layout(matrix(1:3, 3,1))
+plot(elev.data$Elevation..m, type = "l", main = "Original Data", ylab = "elevation")
+plot(sd.ma12[,2], main = "317-Point Moving Average Filter")
+plot(sd.ma24[,2], main = "635-Point Moving Average Filter")
+
+
+#######################################
+####    Filtering  -- Dataset 1    ####
+#######################################
+
+# Load in the temperature data
+smooth.data <- read.csv("data/csvs/pri4_smoothing.csv")
+plot(smooth.data$meantemp, type='l')
+
+# Run the low-pass filter 
+bf_low <- butter(2, 1/50, type='low')
+b_low <- filter(bf_low, smooth.data$meantemp)
+
+# Run the high-pass filter
+bf_high <- butter(2, 1/50, type='high')
+b_high <- filter(bf_high, smooth.data$meantemp)
+
+# Plot the smooth data for the temperature dataset
+layout(matrix(1:3, 3,1))
+plot(smooth.data$meantemp, type = "l", main = "Original Data", ylab = "mean temp")
+plot(b_low, main = "Low-pass filtering", col='red')
+plot(b_high, main = "High-pass filtering", col='red')
+abline(0,0)
+
+#######################################
+####    Filtering  -- Dataset 2    ####
+#######################################
+
+# Load in the elevation data
+elev.data <- read.csv("data/csvs/will-cascade_transect-data.csv")
+# elevation is in meters; renaming for clarity
+names(elev.data)[2] <- "Elevation"
+
+plot(elev.data$Elevation, type='l',  ylab = "Elevation (m)")
+
+# Run the low-pass filter 
+bf_low <- butter(2, 1/50, type='low')
+b_low <- filter(bf_low, elev.data$Elevation)
+
+# Run the high-pass filter
+bf_high <- butter(2, 1/50, type='high')
+b_high <- filter(bf_high, elev.data$Elevation)
+
+# Plot the smooth data for the temperature dataset
+layout(matrix(1:3, 3,1))
+plot(elev.data$Elevation, type = "l", main = "Original Data", ylab = "elevation")
+plot(b_low, main = "Low-pass filtering", col='red')
+plot(b_high, main = "High-pass filtering", col='red')
+abline(0,0)
+
+```
