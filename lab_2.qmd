@@ -1,19 +1,13 @@
 ---
 title: "Lab 2 | GEOG 565"
 author: "Andrew Steinkruger"
-format: html
+format: pdf
 editor: visual
 ---
 
-```{r}
+```{r preliminaries, warning = FALSE, message = FALSE, output = FALSE, echo = FALSE}
 
-1 + 1
-
-```
-
-Words.
-
-```{r reference}
+# Packages
 
 library(dismo)
 library(gstat)
@@ -27,68 +21,64 @@ library(tmap)
 library(lwgeom)
 library(concaveman)
 
-obs <- st_read("data/gis/observations.shp")
-dem <- raster("data/gis/hires.tif")
+# Data
 
-# This is a blank DEM we'll use throughout this lab
+obs <- st_read("data/lab_2/gis/observations.shp")
+dem <- raster("data/lab_2/gis/hires.tif")
+
+# Data Handling
+
 r <- raster(dem) 
-
-# Define and set all layers to the same projection
-obs <- st_transform(obs, crs = 5070)
-#st_crs(obs) <- 5070
 
 target_crs <- "EPSG:5070"
 
-# Reproject the rasters
+obs <- st_transform(obs, crs = target_crs)
+
 dem <- projectRaster(dem, crs = target_crs)
 r <- projectRaster(r, crs = target_crs)
 
-# Plot the points and DEM
-plot(dem, col=grey(1:100/100))
-plot(obs, type = "p", pch = 16, cex = 0.6, col = "red", add = TRUE)
-
-# Perform the rasterization
-
-# Drop Z/M from geometry
 obs <- st_zm(obs)
 
-# Convert to sp for rasterize
 obs_sp <- as(obs, "Spatial")
 obs_sp <- sp::SpatialPointsDataFrame(obs_sp, data = as.data.frame(obs))
 
-# Rasterize
 obs.r <- rasterize(x = obs_sp, r, field = 'Elevation', update = TRUE)
 
-# setting CRS again to be sure
 crs(obs.r) <- crs(dem)
 
-# make function to compute RMSE
+# Null Model
+
 RMSE <- function(observed, predicted) {  
+  
   sqrt(mean((predicted - observed)^2, na.rm = TRUE))
+  
 }
 
-# Create the null model
 mean_elevation = mean(obs$Elevation)
+
 null <- RMSE(mean_elevation, obs$Elevation)
 
-#######################################
-####          VORONOI              ####        
-#######################################
 
-# Create the Voronoi diagram
+```
 
-# Convert sf to sp
+**1.**
+
+```{r 1, echo = FALSE}
+
+# Comparing null and Voronoi models
+
+# Set up Voronoi
+
 obs_sp <- as(obs, "Spatial")
 
-# create Voronoi
 v <- voronoi(obs_sp)
 tin <- rasterize(v, obs.r, 'Elevation')
-plot(tin, col=grey(1:100/100))
 
 kf <- kfold(nrow(obs))
 rmse <- rep(NA, 5)
 
 for (k in 1:5) {  
+  
   test <- obs[kf == k, ]  
   train <- obs[kf != k, ]
   
@@ -104,32 +94,158 @@ for (k in 1:5) {
   
   # Compute RMSE
   rmse[k] <- RMSE(test$Elevation, p$Elevation)
+  
 }
 
-print(paste("Voronoi RMSE for each fold:", rmse))
-print(paste("Voronoi vs. Null model:", mean(rmse) - null))
+# Plot null and Voronoi
 
-#######################################
-####  INVERSE DISTANCE WEIGHTING   ####        
-#######################################
+par(mfrow = c(1, 2), 
+  mai = c(0.1, 0.1, 0.1, 0.1), 
+  oma = c(0, 0, 0, 0),
+  bty = 'n')
 
-# Create the inverse distance weighting model
-idm <- gstat(formula = Elevation~1, locations = obs)
+plot(tin, 
+     col = grey(1:100/100),
+     ann = FALSE,
+     axes = FALSE,
+     legend = FALSE)
+plot(obs, 
+     type = "p",
+     pch = 16, 
+     cex = 0.6, 
+     col = scales::alpha("red", 0.25),
+     add = TRUE,
+     ann = FALSE,
+     axes = FALSE)
+
+plot(dem, 
+     col = grey(1:100/100),
+     ann = FALSE,
+     axes = FALSE,
+     legend = FALSE)
+plot(obs, 
+     type = "p", 
+     pch = 16, 
+     cex = 0.6, 
+     col = scales::alpha("red", 0.25),
+     add = TRUE,
+     ann = FALSE,
+     axes = FALSE,
+     legend = FALSE)
+
+par(mfcol = c(1, 1))
+```
+
+The Voronoi interpolation differs from the DEM at all locations outside the sample points. Since the error in the Voronoi interpolation is sensitive to the scale of the sample, finer features are less distinct in the Voronoi interpolation than coarser features – note that the smaller valleys are mostly indistinct in the Voronoi but the larger valley is distinct. If we broke out squared errors by Voronoi polygon or other areas, we could see that areas with more relief and/or fewer sample points return larger contributions to the magnitude of RMSE than areas with less relief and/or more sample points.
+
+**2.**
+
+```{r 2, echo = FALSE}
+
+# Comparing Voronoi and IDW models
+
+idm <- gstat(formula = Elevation ~ 1, locations = obs)
 idw <- interpolate(object = obs.r, model = idm)
-plot(idw, col=grey(1:100/100))
 
-#####################################
-####          SPLINE             ####        
-#####################################
+# Plot Voronoi and IDW
 
-# Create the thinplate spline model
+par(mfrow = c(1, 2), 
+    mai = c(0.1, 0.1, 0.1, 0.1), 
+    oma = c(0, 0, 0, 0),
+    bty = 'n')
+
+plot(idw, 
+     col = grey(1:100/100),
+     ann = FALSE,
+     axes = FALSE,
+     legend = FALSE)
+plot(obs, 
+     type = "p", 
+     pch = 16, 
+     cex = 0.6, 
+     col = scales::alpha("red", 0.25),
+     add = TRUE,
+     ann = FALSE,
+     axes = FALSE,
+     legend = FALSE)
+
+plot(tin, 
+     col = grey(1:100/100),
+     ann = FALSE,
+     axes = FALSE,
+     legend = FALSE)
+plot(obs, 
+     type = "p",
+     pch = 16, 
+     cex = 0.6, 
+     col = scales::alpha("red", 0.25),
+     add = TRUE,
+     ann = FALSE,
+     axes = FALSE,
+     legend = FALSE)
+
+par(mfcol = c(1, 1))
+
+```
+
+Since IDW (with this sample and this method) is equal to the null model except in "wells" around sample points, it better reflects the DEM where sample points capture local variation or where linear interpolation performs worse than the null model. That is, IDW performs better than linear interpolation in some cases, like where one sample point falls in a valley and another falls on a peak so that IDW between them approximates the DEM slope, and worse when linear interpolation outperforms the null model and no sample points are close enough to support IDW.
+
+**3.**
+
+```{r 3, warning = FALSE, echo = FALSE}
+
+# Comparing IDW and spline
+
 m <- Tps(st_coordinates(obs), obs$Elevation)
-tps <- interpolate(object = obs.r, model = m)
-plot(tps, col=grey(1:100/100))
 
-#####################################
-####          KRIGING            ####        
-#####################################
+tps <- interpolate(object = obs.r, model = m)
+
+par(mfrow = c(1, 2), 
+    mai = c(0.1, 0.1, 0.1, 0.1), 
+    oma = c(0, 0, 0, 0),
+    bty = 'n')
+
+plot(idw, 
+     col = grey(1:100/100),
+     ann = FALSE,
+     axes = FALSE,
+     legend = FALSE)
+plot(obs, 
+     type = "p",
+     pch = 16, 
+     cex = 0.6, 
+     col = scales::alpha("red", 0.25),
+     add = TRUE,
+     ann = FALSE,
+     axes = FALSE,
+     legend = FALSE)
+
+plot(tps, 
+     col = grey(1:100/100),
+     ann = FALSE,
+     axes = FALSE,
+     legend = FALSE)
+plot(obs, 
+     type = "p", 
+     pch = 16, 
+     cex = 0.6, 
+     col = scales::alpha("red", 0.25),
+     add = TRUE,
+     ann = FALSE,
+     axes = FALSE,
+     legend = FALSE)
+
+par(mfcol = c(1, 1))
+
+```
+
+The thin plate spline does not revert to the null model outside of "wells" around sample points while IDW does. Consequently, the spline captures some neat landscape features like smaller valleys. We can eyeball greater errors (in the spline results relative to the DEM) where sample points are more sparse and the spline fit gets more creative.
+
+**4.**
+
+```{r 4, warning = FALSE, message = FALSE, echo = FALSE}
+
+# Set up kriging for comparison with all models.
 
 # Generate the spatial grid file
 r <- raster(dem)
@@ -140,29 +256,33 @@ proj4string(g) <- CRS("+init=EPSG:5070")
 # The width argument sets the variogram distance
 gs <- gstat(formula = Elevation ~ 1, locations = obs)
 v <- variogram(gs, width = 10) 
-plot(v)
+# plot(v)
 
 # Build a base gstat object for the variable
 gs <- gstat(formula = Elevation ~ 1, locations = obs)
 
 # Compute the empirical variogram (adjust width as needed)
 v <- variogram(gs, width = 10)
-plot(v, main = "Empirical Variogram")
+# plot(v, main = "Empirical Variogram")
 
 # Fit a theoretical model to the variogram
 # vgm(psill, model, range, nugget)
 fve <- fit.variogram(v, vgm(psill = 2100, model = "Gau", range = 600, nugget = 0))
 
 # Check the fit visually
-plot(v, fve, main = "Fitted Variogram Model")
+# plot(v, fve, main = "Fitted Variogram Model")
 
 # Construct the Kriging model
-k  <- gstat(formula = Elevation ~ 1, locations = obs, model = fve, nmax=25, maxdist=250)
+k  <- 
+  gstat(formula = Elevation ~ 1, 
+        locations = obs, 
+        model = fve, 
+        nmax=25, 
+        maxdist=250)
 kp <- predict(k, g)
 ok <- brick(kp)
 names(ok) <- c('estimate','variance')
-plot(ok[[1]], col = grey(1:100/100), main = "Kriging Estimate")
-
+# plot(ok[[1]], col = grey(1:100/100), main = "Kriging Estimate")
 
 # Ensure your observations are simple POINTS (no Z/M)
 obs_pts <- st_collection_extract(st_zm(obs), "POINT")
@@ -176,25 +296,83 @@ hull_concave <- st_transform(hull_concave, st_crs(dem))
 hull_sp <- as(hull_concave, "Spatial")
 
 tin_mask <- mask(crop(tin, hull_sp), hull_sp)
-plot(tin_mask, col = grey(1:100/100), main = "Voronoi (masked to observed area)")
-plot(hull_concave, add = TRUE, border = "red", lwd = 2)
 
 idw_mask <- mask(crop(idw, hull_sp), hull_sp)
-plot(idw_mask, col = grey(1:100/100), main = "IDW (masked to observed area)")
-plot(hull_concave, add = TRUE, border = "red", lwd = 2)
 
 tps_mask <- mask(crop(tps, hull_sp), hull_sp)
-plot(tps_mask, col = grey(1:100/100), main = "TPS (masked to observed area)")
-plot(hull_concave, add = TRUE, border = "red", lwd = 2)
 
 ok_est_mask <- mask(crop(ok[[1]], hull_sp), hull_sp)
-plot(ok_est_mask, col = grey(1:100/100), main = "Kriging Estimate (masked to observed area)")
-plot(hull_concave, add = TRUE, border = "red", lwd = 2)
 
+par(mfrow = c(2, 2), 
+    mai = c(0.1, 0.1, 0.1, 0.1), 
+    oma = c(0, 0, 0, 0),
+    bty = 'n')
 
-###################################
-####    MODEL EVALUTATION      ####
-###################################
+plot(tin_mask, 
+     col = grey(1:100/100), 
+     main = "Voronoi",
+     ann = FALSE,
+     axes = FALSE,
+     legend = FALSE)
+plot(hull_concave,
+     add = TRUE, 
+     border = "red", 
+     lwd = 2,
+     ann = FALSE,
+     axes = FALSE,
+     legend = FALSE)
+
+plot(idw_mask, 
+     col = grey(1:100/100), 
+     main = "IDW",
+     ann = FALSE,
+     axes = FALSE,
+     legend = FALSE)
+plot(hull_concave, 
+     add = TRUE, 
+     border = "red", 
+     lwd = 2,
+     ann = FALSE,
+     axes = FALSE,
+     legend = FALSE)
+
+plot(tps_mask, 
+     col = grey(1:100/100),
+     main = "TPS",
+     ann = FALSE,
+     axes = FALSE,
+     legend = FALSE)
+plot(hull_concave, 
+     add = TRUE, 
+     border = "red", 
+     lwd = 2,
+     ann = FALSE,
+     axes = FALSE,
+     legend = FALSE)
+
+plot(ok_est_mask, 
+     col = grey(1:100/100), 
+     main = "Kriging",
+     ann = FALSE,
+     axes = FALSE,
+     legend = FALSE)
+plot(hull_concave, 
+     add = TRUE, 
+     border = "red", 
+     lwd = 2,
+     ann = FALSE,
+     axes = FALSE,
+     legend = FALSE)
+
+par(mfrow = c(1, 1))
+
+```
+
+Kriging appears to better capture DEM features across scales, for instance in the range of different valley sizes. While kriging does not get at the steepest, lowest sections of small valleys, it manages a better approximation than any of the other methods. Unlike linear interpolation and IDW, kriging estimates elevation at locations between sample points globally, and unlike the thin plate spline, kriging retains original sample point values (with local accuracy reflecting that).
+
+```{r 5, warning = FALSE, message = FALSE, echo = FALSE}
+
+# Run RMSE for each interpolation result.
 
 # Specify the number of folds and partition the datasets randomly
 nfolds <- 5
@@ -231,21 +409,242 @@ for (i in 1:nfolds) {
 }
 
 # Get the average error
+rml <- mean(rmse)
 rmi <- mean(idwrmse)
 rmk <- mean(krigrmse)
 rmt <- mean(tpsrmse)
 
+print(paste("Mean RMSE for each Voronoi:", rml))
 print(paste("Mean RMSE for each IDW:", rmi))
 print(paste("Mean RMSE for each Kriging:", rmk))
 print(paste("Mean RMSE for each TPS:", rmt))
 
-###################################
-####    LANDSCAPE FEATURES     ####
-###################################
+```
+
+RMSE suggests the thin plate spline performs best, followed by kriging, linear interpolation, and IDW. I find this result surprising because I expected kriging to perform best after eyeballing plots. I speculate that TPS outperforms kriging in areas of lower relief, which are a little harder to parse visually (so that I might have been biased toward kriging by looking at interesting landscape features). However, RMSE isn't really the last word on which models are better and worse: we might also be interested in which model performs best for specific features, ranges of heights, and so on. With that said, IDW does appear to perform meaningfully worse in aggregate and does not appear to confer any particular local advantages.
+
+**6.**
+
+After comparing the images with polygons to highlight features of interest, contours to highlight terrain, and different zooms/local resolutions, TPS better captures finer-scale ridges in the original DEM (i.e. I was wrong in speculating in (5)). TPS does also feature some more concerning errors, like predicting lakes in valleys where none exist, but RMSE indicates the trade-off between types of errors favors TPS.
+
+**7.**
+
+TPS better captures the break in elevations from the steeper slopes to the valley bottom, but to my eye kriging better captures the slope of the valley bottom (from right to left in our orientation).
+
+**8.**
+
+With reference to lecture, the spline and kriging results differ in that the spline uses information local to each sample point (or rather each pair of sample points) while kriging uses global information in the semivariogram. I would guess that the spline results are then better (feature smaller errors) where local patterns dominate features of interest, as in sharp valleys and ridges, while kriging is better where global patterns dominate, as in the general slope of the valley bottom from one side of the region to the other.
+
+**9.**
+
+If I were interested in a global pattern, I would use kriging first (and then check whether spline or other methods perform better). If I were interested in a local pattern or patterns, I would use a spline first. In other applications outside of estimating elevations over this DEM and sample, patterns occurring over multiple scales might complicate that choice. For example, if I were interested in estimating the paths of waterways over the DEM, I might find that neither method is appropriate across all scales we observe in the DEM. Then I might look to other methods or try to find a pattern at a single scale to answer whatever question motivates the study.
+
+**10.**
+
+-   Linear interpolation is useful when sample points meaningfully approximate their surroundings and sharp edges between Thiessen/Voronoi polygons are not problematic for analysis. For example, a study of soil moisture over elevations on rolling plains might be a convenient setting for linear interpolation. On the other hand, linear interpolation is less useful when features between sample points exhibit nonlinear changes (as in a slope) or when sharp edges between polygons are prohibitive of some analysis of interest.
+
+-   IDW is useful when a sample is dense enough (for some pattern and scale of interest) that local information is sufficient for estimation. However, IDW becomes less useful when a sample is less dense, especially around features that depart further from the null model.
+
+-   Splines are useful when estimating variation in local features is important, especially with features defined by nonlinear slopes that a piecewise polynomial can approximate. When local features are not the focus of a study, then a spline might not outperform IDW or kriging (in terms of useful estimation if not RMSE).
+
+-   Kriging, by contrast, is useful when estimating global variation is important. Kriging can pick up a global pattern that informs estimation at all points in a region. However, kriging is then less likely to estimate local variation.
+
+**11.**
+
+```{r 11, echo = FALSE}
+
+# Turn off basetheme settings to work with series.
+
+# basetheme(NULL)
+
+# Load in the temperature data
+temp.data <- read.csv("data/lab_2/csvs/pri4_smoothing.csv")
+
+# plot(temp.data$meantemp, type='l', ylab = "mean temp")
+
+# Load in the smoothing coefficients
+ma12 <- c(rep(1,13))/13
+ma24 <- c(rep(1,25))/25
+
+# Run the smoothing (despite the function name being called filter)
+sd.ma12 <- stats::filter(temp.data, ma12, method = "convolution", sides = 2)
+sd.ma24 <- stats::filter(temp.data, ma24, method = "convolution", sides = 2)
+
+# Plot the smooth data for the temperature dataset
+
+par(mar = c(1, 1, 7, 7))
+
+layout(matrix(1:3, 3, 1))
+
+plot(temp.data$meantemp, 
+     type = "l", 
+     main = "Original Data", 
+     ylab = "Mean Temp")
+
+plot(sd.ma12[,2], 
+     main = "13-Point Moving Average Filter", 
+     ylab = "Mean Temp")
+
+plot(sd.ma24[,2], 
+     main = "25-Point Moving Average Filter", 
+     ylab = "Mean Temp")
+
+```
+
+**12.**
+
+The 13-hour window lowers peaks and raises troughs relative to the original data, so that the data are less dispersed within each short-term trend (daily-to-weekly) and longer-term trends are easier to parse. The 25-hour window does the same, but practically eliminates daily trends so that we are left with only longer-term trends. This could have the disadvantage of eliminating some patterns that are relevant in the long term but close to the 25-hour window, but I'm not seeing a neat example of that.
+
+**13.**
+
+```{r 13, echo = FALSE}
+
+# Load in the elevation data
+elev.data <- read.csv("data/lab_2/csvs/will-cascade_transect-data.csv")
+
+# plot(elev.data$Elevation..m., type='l')
+
+# Load in the smoothing coefficients
+ma12 <- c(rep(1,317))/317
+ma24 <- c(rep(1,635))/635
+
+# Run the smoothing (despite the function name being called filter)
+sd.ma12 <- stats::filter(elev.data, ma12, method = "convolution", sides = 2)
+sd.ma24 <- stats::filter(elev.data, ma24, method = "convolution", sides = 2)
+
+# Plot the smooth data for the elevation dataset
+
+par(mar = c(1, 1, 7, 7))
+
+layout(matrix(1:3, 3,1))
+
+plot(elev.data$Elevation..m, 
+     type = "l", 
+     main = "Original Data", 
+     ylab = "Elevation")
+
+plot(sd.ma12[,2], 
+     main = "317-Point Moving Average Filter", 
+     ylab = "Elevation")
+
+plot(sd.ma24[,2], 
+     main = "635-Point Moving Average Filter", 
+     ylab = "Elevation")
+
+```
+
+**14.**
+
+As with the first dataset, short-distance patterns are mostly lost from the original data to the 317-point filter, and short-distance patterns are eliminated altogether while some mid-distance (e.g. 500-unit) patterns fall out with the 635-point filter. The original data might be best if we were interested in geological formations within specific features like hills; the 317-point filter might be best if we were interested in larger features like major ridges and valleys in the Cascades; and the 635-point filter might be best if we were interested in understanding only the gradient from the Willamette Valley bottom to the Cascades crest.
+
+**15.**
+
+In both cases, the coarsest filter might eliminate some extremes in the original data that matter. For example, extreme temperatures or extreme elevation changes over short changes in time/distance might matter a lot more than the same changes in temperature/elevation over longer changes in time/distance. There are also clear examples of mid-term/mid-distance patterns disappearing in the longest-window filters. However, these are cases of drift that we could predict from eyeballing the data while choosing our window lengths, so it's not clear that they're problematic after the fact.
+
+**16.**
+
+```{r 16, echo = FALSE}
+
+# Load in the temperature data
+smooth.data <- read.csv("data/lab_2/csvs/pri4_smoothing.csv")
+
+# plot(smooth.data$meantemp, type='l')
+
+# Run the low-pass filter 
+bf_low <- butter(2, 1/50, type='low')
+b_low <- filter(bf_low, smooth.data$meantemp)
+
+# Run the high-pass filter
+bf_high <- butter(2, 1/50, type='high')
+b_high <- filter(bf_high, smooth.data$meantemp)
+
+# Plot the smooth data for the temperature dataset
+
+par(mar = c(1, 1, 7, 7))
+
+layout(matrix(1:3, 3,1))
+
+plot(smooth.data$meantemp, 
+     type = "l", 
+     main = "Original Data", 
+     ylab = "Mean Temp")
+
+plot(b_low, 
+     main = "Low-Pass Filtering", 
+     ylab = "Mean Temp", 
+     col = 'red')
+
+plot(b_high, 
+     main = "High-Pass Filtering", 
+     ylab = "Mean Temp", 
+     col = 'red')
+
+abline(0,0)
+
+```
+
+**17.**
+
+```{r 17, echo = FALSE}
+
+# Load in the elevation data
+elev.data <- read.csv("data/lab_2/csvs/will-cascade_transect-data.csv")
+# elevation is in meters; renaming for clarity
+names(elev.data)[2] <- "Elevation"
+
+# plot(elev.data$Elevation, type='l',  ylab = "Elevation (m)")
+
+# Run the low-pass filter 
+bf_low <- butter(2, 1/50, type='low')
+b_low <- filter(bf_low, elev.data$Elevation)
+
+# Run the high-pass filter
+bf_high <- butter(2, 1/50, type='high')
+b_high <- filter(bf_high, elev.data$Elevation)
+
+# Plot the smooth data for the temperature dataset
+
+par(mar = c(1, 1, 7, 7))
+layout(matrix(1:3, 3,1))
+
+plot(elev.data$Elevation, 
+     type = "l", 
+     main = "Original Data", 
+     ylab = "Elevation")
+
+plot(b_low, 
+     main = "Low-Pass Filtering", 
+     ylab = "Elevation", 
+     col = 'red')
+
+plot(b_high, 
+     main = "High-Pass Filtering", 
+     ylab = "Elevation", 
+     col = 'red')
+
+abline(0,0)
+
+```
+
+**18.**
+
+In both cases, the high-pass filter eliminates lower-frequency (longer-term/longer-distance) trends from the original data. This leaves only higher-frequency trends, so that the high-pass filter emphasizes daily/nearby variation. This might mean capturing only weather and neighborhood-scale landscapes rather than climate and regional landscapes.
+
+**19.**
+
+In both cases, the low-pass filter eliminates higher-frequency trends from the original data. This leaves only lower-frequency trends, emphasizing long-term/regional variation. This might mean capturing only climate and regional landscapes rather than weather and neighborhood landscapes.
+
+**20.**
+
+Smoothing reduces data to the mean of the analyst's selected window(s). Filtering decomposes data into different sets of trends by the analyst's selected passes/filters. Both methods risk misleading the analyst when the windows/filters are of inappropriate scale with reference to trends of interest; this poses a problem for choosing methods and scales ex ante. In the case of temperature, smoothing might be best for applications where means of different windows matter most, for example for detecting seasonal changes. Then filtering might be best when distinguishing high-/low-frequency patterns is the goal, for example for detecting trends in high or low degree-days in agriculture. In the case of elevation, smoothing might be best where mean changes over the landscape matter most, as in detecting regional landforms. On the other hand, filtering might be best where high-/low-frequency patterns matter, for example if capturing especially sharp gradients or parsing out particular valley shapes is the goal.
+
+```{r reference, eval = FALSE, include = FALSE}
+
+# Set up landscape features
 
 # Read in the shapefiles
-slopeAOI  <- st_read("data/gis/slopeAOI.shp")
-valleyAOI <- st_read("data/gis/valleyAOI.shp")
+slopeAOI  <- st_read("data/lab_2/gis/slopeAOI.shp")
+valleyAOI <- st_read("data/lab_2/gis/valleyAOI.shp")
 slopeAOI <- st_transform(slopeAOI, crs = 5070)
 valleyAOI <- st_transform(valleyAOI, crs = 5070)
 
@@ -256,8 +655,7 @@ plot(slopeAOI,
      add = TRUE,
      border = "skyblue",                          # outline color
      lwd = 2,                                     # thicker border
-     col = adjustcolor("skyblue", alpha.f = 0.2)) # transparent fil
-
+     col = adjustcolor("skyblue", alpha.f = 0.2)) # transparent fill
 
 # Make 10 m contours from the DEM
 contours10 <- rasterToContour(dem, levels = seq(
@@ -343,99 +741,5 @@ plot(contours10, add = TRUE, col = "darkgrey", lwd = 0.7)
 plot(obs, pch = 16, cex = 0.6, col = "red", add = TRUE)
 plot(valleyAOI, add = TRUE, border = "skyblue", lwd = 2,
      col = adjustcolor("skyblue", alpha.f = 0.2))
-
-######################################
-####    Smoothing -- Dataset 1    ####
-######################################
-
-# Load in the temperature data
-temp.data <- read.csv("data/csvs/pri4_smoothing.csv")
-plot(temp.data$meantemp, type='l', ylab = "mean temp")
-
-# Load in the smoothing coefficients
-ma12 <- c(rep(1,13))/13
-ma24 <- c(rep(1,25))/25
-
-# Run the smoothing (despite the function name being called filter)
-sd.ma12 <- stats::filter(temp.data, ma12, method = "convolution", sides = 2)
-sd.ma24 <- stats::filter(temp.data, ma24, method = "convolution", sides = 2)
-
-# Plot the smooth data for the temperature dataset
-layout(matrix(1:3, 3,1))
-plot(temp.data$meantemp, type = "l", main = "Original Data", ylab = "mean temp")
-plot(sd.ma12[,2], main = "13-Point Moving Average Filter")
-plot(sd.ma24[,2], main = "25-Point Moving Average Filter")
-
-#######################################
-####    Smoothing  -- Dataset 2    ####
-#######################################
-
-# Load in the elevation data
-elev.data <- read.csv("data/csvs/will-cascade_transect-data.csv")
-plot(elev.data$Elevation..m., type='l')
-
-# Load in the smoothing coefficients
-ma12 <- c(rep(1,317))/317
-ma24 <- c(rep(1,635))/635
-
-# Run the smoothing (despite the function name being called filter)
-sd.ma12 <- stats::filter(elev.data, ma12, method = "convolution", sides = 2)
-sd.ma24 <- stats::filter(elev.data, ma24, method = "convolution", sides = 2)
-
-# Plot the smooth data for the elevation dataset
-layout(matrix(1:3, 3,1))
-plot(elev.data$Elevation..m, type = "l", main = "Original Data", ylab = "elevation")
-plot(sd.ma12[,2], main = "317-Point Moving Average Filter")
-plot(sd.ma24[,2], main = "635-Point Moving Average Filter")
-
-
-#######################################
-####    Filtering  -- Dataset 1    ####
-#######################################
-
-# Load in the temperature data
-smooth.data <- read.csv("data/csvs/pri4_smoothing.csv")
-plot(smooth.data$meantemp, type='l')
-
-# Run the low-pass filter 
-bf_low <- butter(2, 1/50, type='low')
-b_low <- filter(bf_low, smooth.data$meantemp)
-
-# Run the high-pass filter
-bf_high <- butter(2, 1/50, type='high')
-b_high <- filter(bf_high, smooth.data$meantemp)
-
-# Plot the smooth data for the temperature dataset
-layout(matrix(1:3, 3,1))
-plot(smooth.data$meantemp, type = "l", main = "Original Data", ylab = "mean temp")
-plot(b_low, main = "Low-pass filtering", col='red')
-plot(b_high, main = "High-pass filtering", col='red')
-abline(0,0)
-
-#######################################
-####    Filtering  -- Dataset 2    ####
-#######################################
-
-# Load in the elevation data
-elev.data <- read.csv("data/csvs/will-cascade_transect-data.csv")
-# elevation is in meters; renaming for clarity
-names(elev.data)[2] <- "Elevation"
-
-plot(elev.data$Elevation, type='l',  ylab = "Elevation (m)")
-
-# Run the low-pass filter 
-bf_low <- butter(2, 1/50, type='low')
-b_low <- filter(bf_low, elev.data$Elevation)
-
-# Run the high-pass filter
-bf_high <- butter(2, 1/50, type='high')
-b_high <- filter(bf_high, elev.data$Elevation)
-
-# Plot the smooth data for the temperature dataset
-layout(matrix(1:3, 3,1))
-plot(elev.data$Elevation, type = "l", main = "Original Data", ylab = "elevation")
-plot(b_low, main = "Low-pass filtering", col='red')
-plot(b_high, main = "High-pass filtering", col='red')
-abline(0,0)
 
 ```
