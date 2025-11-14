@@ -48,11 +48,11 @@ vis_1_1
 
 ```
 
--   The *Commiphora* shrubs are clustered over space: most points are close to a small subset of other points and far from all other points.
+-   The Commiphora shrubs are clustered over space: most points are close to a small subset of other points and far from all other points.
 
 -   The termite mounds are dispersed over space: most points share near-identical nearest-neighbor distances.
 
--   The *Acacia senegal* trees are randomly distributed over space: distances between points vary substantially with no clear pattern.
+-   The Acacia senegal trees are randomly distributed over space: distances between points vary substantially with no clear pattern.
 
 **1.2**
 
@@ -194,11 +194,11 @@ tab_1_2_chi =
   
 ```
 
-The following tables report statistics by group (e.g. *Commophora*) for each quadrat count.
+The following tables report statistics by group (e.g. Commiphora) for each quadrat count.
 
-Column "*j*" indexes aggregations of *x* such that each *j* has a sum of *x* equal to or greater than 5.
+Column "j" indexes aggregations of x such that each j has a sum of x equal to or greater than 5.
 
-Columns "*O~j~*", "*E~j~*", and "Partial Chi-Squared" then report duplicate results for each *j.*
+Columns "O~j~", "E~j~", and "Partial Chi-Squared" then report results for each j (with repetition).
 
 ```{r 1_2_print_1, echo = FALSE}
 
@@ -221,7 +221,7 @@ tab_1_2_chi
 
 **1.3**
 
-For each group, I am testing the null hypothesis of complete randomness by comparing the observed ch-squared to a critical value of the chi-squared distribution with reference to the available degrees of freedom and selected *p*-value. If the observed value is greater than the critical value, then I can reject the null hypothesis that the observed points are distributed by a homogeneous planar Poisson point process and thus that the points are distributed under complete randomness.
+For each group, I am testing the null hypothesis of complete randomness by comparing the observed ch-squared to a critical value of the chi-squared distribution with reference to the available degrees of freedom and selected p-value. If the observed value is greater than the critical value, then I can reject the null hypothesis that the observed points are distributed by a homogeneous planar Poisson point process and thus that the points are distributed under complete randomness.
 
 Column "Reject" in the preceding table reports the results of these comparisons as logical values.
 
@@ -229,172 +229,184 @@ Column "Reject" in the preceding table reports the results of these comparisons 
 
 Please refer to the preceding table for chi-squared values.
 
--   For *Commiphora* shrubs, I reject the null hypothesis.
+-   For Commiphora shrubs, I reject the null hypothesis.
 
 -   For termite mounds, I reject the null hypothesis.
 
--   For *Acacia senegal* trees, I cannot reject the null hypothesis.
+-   For Acacia senegal trees, I cannot reject the null hypothesis.
 
 Note that these results conform to the visual results in (1.1).
 
 **1.5**
 
-With referenced to provided values for variance and lambda:
+With reference to provided values for variance and lambda:
 
--   *Commiphora* shrubs are clustered.
+-   Commiphora shrubs are clustered.
 
 -   Termite mounds are dispersed.
 
--   *Acacia senegal* trees appear to be clustered, but our hypothesis testing suggests this is spurious.
+-   Acacia senegal trees appear to be clustered, but our hypothesis testing suggests this is spurious.
 
 **1.6**
 
-State the limitations to quadrat analysis.
+Quadrat analysis requires points that are given, not selected by the researcher, as well as sufficient observations for the chi-squared test. Quadrat analysis also requires the researcher to choose the grain, extent, and position of quadrats. That is, quadrat analysis cannot detect patterns at multiple scales and could suffer from edge effects at the boundaries of each quadrat.
 
 **EC.**
 
-Conduct a second quadrat analysis using a 5x5 grid. (See .pdf.)
-
 **2.1**
 
-```{r 2_1, eval = FALSE}
+```{r 2_1, warning = FALSE, message = FALSE}
 
-# Note reordering from provided code.
+# Get histograms of nearest-neighbor distances.
 
-# (!!!) Unfuck object overwriting.
+dat_nn_com =
+  ppp(data %>% filter(group == "commiphora") %>% pull(x), 
+      data %>% filter(group == "commiphora") %>% pull(y), 
+      window = owin(c(0, 10), c(0, 10))) %>% 
+  nndist %>% 
+  tibble(NN = .,
+         Group = "commiphora")
 
-# Subset just the commiphora
-data_subset_com <- subset(data, group == "commiphora")
+dat_nn_ter = 
+  ppp(data %>% filter(group == "termites") %>% pull(x), 
+      data %>% filter(group == "termites") %>% pull(y), 
+      window = owin(c(0, 10), c(0, 10))) %>% 
+  nndist %>% 
+  tibble(NN = .,
+         Group = "termites")
 
-# Get the NN-distances histogram
-data.ppp <- ppp(data_subset_com$x, data_subset_com$y, window = owin(c(0,10), c(0,10)))
-data.nnd <- nndist(data.ppp)
-hist(data.nnd, main = "commiphora")
+dat_nn_aca = 
+  ppp(data %>% filter(group == "acacia") %>% pull(x), 
+      data %>% filter(group == "acacia") %>% pull(y), 
+      window = owin(c(0, 10), c(0, 10))) %>% 
+  nndist %>% 
+  tibble(NN = .,
+         Group = "acacia")
 
-# Subset just the termites
-data_subset_term <- subset(data, group == "termites")
+dat_nn = 
+  dat_nn_com %>% 
+  bind_rows(dat_nn_ter) %>% 
+  bind_rows(dat_nn_aca)
 
-# Get the NN-distances histogram
-data.ppp <- ppp(data_subset_term$x, data_subset_term$y, window = owin(c(0,10), c(0,10)))
-data.nnd <- nndist(data.ppp)
-hist(data.nnd, main = "termites")
+vis_nn = 
+  dat_nn %>% 
+  mutate(Group = 
+           Group %>% 
+           factor %>% 
+           fct_relevel("commiphora", "termites", "acacia")) %>% 
+  ggplot() +
+  geom_histogram(aes(x = NN,
+                     fill = Group)) +
+  labs(x = "Nearest-Neighbor Distance",
+       y = "Count") +
+  facet_wrap(~ Group, ncol = 3) +
+  theme_minimal() +
+  theme(legend.position = "none")
 
-# Subset just the acacia
-data_subset_ac <- subset(data, group == "acacia")
-
-# Get the NN-distances histogram
-data.ppp <- ppp(data_subset_ac$x, data_subset_ac$y, window = owin(c(0,10), c(0,10)))
-data.nnd <- nndist(data.ppp)
-hist(data.nnd, main = "acacia")
-
+vis_nn
+  
 ```
 
-Paste your histograms. (See .pdf.)
+-   The *Commiphora* shrubs have shorter nearest-neighbor distances centered around 0.25, suggesting clustering.
 
-**2.2**
+-   The termite mounds have moderate nearest-neighbor distances in a distribution centered around 0.75 with little variance, suggesting dispersal.
 
-```{r 2_2, eval = FALSE}
+-   The *Acacia senegal* trees have a wide range of nearest-neighbor distances in a distribution centered around 0.50 with greater variance than the other two distributions, suggesting randomness.
 
-# As above, work out overwritten objects.
+**2.2 - 2.6**
 
-mean.nnd <- mean(data.nnd)
+In the following table, variables prefixed "Obs\_" are observed values (**2.2**) while "Exp_Mean" is the expected mean (**2.3**). For each group, I am testing the null hypothesis of complete randomness in nearest-neighbor distances (**2.4**). "Z" reports Z-statistics (**2.5**). "Reject" reports the results of hypothesis tests for *p* \< 0.05; for *Commiphora* shrubs and termite mounds, I reject the null hypothesis because each group's Z-statistic outside the range of critical values (-1.96, 1.96), while for *Acacia senegal* trees, I cannot reject the null hypothesis because the group's Z-statistic falls inside the range of critical values (**2.6**).
 
-var.nnd <- var(data.nnd)
+```{r 2_2}
 
-```
+tab_nn = 
+  dat_nn %>% 
+  mutate(Group = 
+           Group %>% 
+           factor %>% 
+           fct_relevel("commiphora", "termites", "acacia")) %>% 
+  group_by(Group) %>% 
+  summarize(Obs_Mean = mean(NN),
+            Obs_Var = var(NN),
+            Obs_SE = sd(NN) / sqrt(n()),
+            Exp_Mean = 0.5 * sqrt(100 / n()),
+            Z = (Obs_Mean - Exp_Mean) / Obs_SE) %>% 
+  mutate(Reject = abs(Z) > 1.96) %>% 
+  mutate(across(2:6, ~ round(.x, 2))) %>% 
+  gt
 
-Calculate the observed mean and variance of NND . . .. (See .pdf.)
-
-**2.3**
-
-```{r 2_3, eval = FALSE}
-
-exp.nnd  <- 0.5 * sqrt(100 / nrow(data_subset_com))
-
-```
-
-Calculate the expected mean NND. (See .pdf.)
-
-**2.4**
-
-What is the null hypothesis?
-
-**2.5**
-
-```{r 2_5, eval = FALSE}
-
-z.commiphora <- (mean.nnd - exp.nnd) / se.mean
+tab_nn
 
 ```
-
-Determine the Z-statistic . . .. (See .pdf.)
-
-**2.6**
-
-For each dataset, do you accept/reject the hypothesis? On what basis?
 
 **2.7**
 
-State how you interpret the pattern . . .. (See .pdf.)
+-   *Commiphora* shrubs are clustered because their observed mean nearest-neighbor distance is less than the expected mean nearest-neighbor distance and the Z-statistic testing this relationship indicates significance at *p* \< 0.05.
+
+-   Termite mounds are dispersed because their observed mean nearest-neighbor distance is greater than the expected mean nearest-neighbor distance and the Z-statistic testing this relationship indicates significance at *p* \< 0.05.
+
+-   *Acacia senegal* trees appear to be clustered by comparison of the observed and expected means, but our hypothesis testing suggests this is spurious.
 
 **2.8**
 
-State the limitations of using a nearest-neighbor analysis.
+Nearest-neighbor analysis requires points that are given, not selected by the researcher, and is subject to bias from edge effects.
 
 **3.1**
 
 ```{r 3_1, eval = FALSE}
 
-############# COMMIPHORA 3. ################
+par(mfrow = c(1, 3), bty = 'n')
 
-# load the NN-distances
-data_subset_com <- subset(data, group == "commiphora")
-data.ppp <- ppp(data_subset_com$x, data_subset_com$y, window = owin(c(0,10), c(0,10)))
-data.nnd <- nndist(data.ppp)
+# Commiphora
 
-# plot F(r) as function of R
-plot(sort(data.nnd), 1:length(data.nnd),
-     xlab = 'r (distance m)',
-     ylab = 'F(r)', main = 'commiphora',
-     pch =21, bg="blue")
+dat_nn_com %>% 
+  pull(NN) %>% 
+  sort %>%
+  plot(., 
+       1:length(.),
+       xlab = 'r (distance m)',
+       ylab = 'F(r)', main = 'commiphora',
+       pch = 21, bg = "blue")
 
-############# Termites 3. ################
+# Termites
 
-# load the NN-distances
-data_subset_term <- subset(data, group == "termites")
-data.ppp <- ppp(data_subset_term$x, data_subset_term$y, window = owin(c(0,10), c(0,10)))
-data.nnd <- nndist(data.ppp)
+dat_nn_ter %>% 
+  pull(NN) %>% 
+  sort %>%
+  plot(., 
+       1:length(.),
+       xlab = 'r (distance m)',
+       ylab = 'F(r)', main = 'termites',
+       pch = 21, bg = "blue")
 
-# plot F(r) as function of R
-plot(sort(data.nnd), 1:length(data.nnd),
-     xlab = 'r (distance m)',
-     ylab = 'F(r)', main = 'termites',
-     pch = 21, bg="blue")
+# Acacia
 
-############# ACACIA 3. ################
+dat_nn_aca %>% 
+  pull(NN) %>% 
+  sort %>%
+  plot(., 
+       1:length(.),
+       xlab = 'r (distance m)',
+       ylab = 'F(r)', main = 'acacia',
+       pch = 21, bg = "blue")
 
-# load the NN-distances
-data_subset_ac <- subset(data, group == "acacia")
-data.ppp <- ppp(data_subset_ac$x, data_subset_ac$y, window = owin(c(0,10), c(0,10)))
-data.nnd <- nndist(data.ppp)
-
-# plot F(r) as function of R
-plot(sort(data.nnd), 1:length(data.nnd),
-     xlab = 'r (distance m)',
-     ylab = 'F(r)', main = 'acacia',
-     pch = 21, bg="blue")
+par(mfrow = c(1, 1))
 
 ```
 
-Plot F(r) as a function of r for each of the three data sets. Describe, in your own words, what F(r) and r represent.
+*r* is a variable radius. *F(r)* is the complete distribution function of all observed nearest-neighbor distances for each *r*.
 
 **3.2**
 
-Are the locations of the three species clustered, dispersed or random? Interpret the spatial patterns of the points based on the shapes of the curves.
+-   *Commiphora* shrubs appear to be clustered because the corresponding *F(r)* increases steeply for lower values of *r*, indicating that most distances are shorter rather than longer.
+
+-   Termite mounds appear to be dispersed because the corresponding *F(r)* increases steeply for higher values of *r*, indicating that most distances are longer rather than shorter. We can also note relatively little variance in *F(r)* over values of *r*, which corresponds to similar observations in quadrat and NN analysis.
+
+-   *Acacia senegal* trees are not clearly clustered or dispersed because the corresponding *F(r)* is not clearly different than the cumulative distribution function of a normal distribution.
 
 **3.3**
 
-What can you say about the scale of patterns observed?
+The clustering of *Commiphora* shrubs appears to occur on a scale of around 0.25 m, while the dispersal of termite mounds appears to occur on a scale of around 0.75 m. There is no clear pattern on any relevant scale for *Acacia senegal* trees.
 
 **4.1**
 
