@@ -5,7 +5,7 @@ format: html
 editor: visual
 ---
 
-```{r preliminaries, warning = FALSE, message = FALSE, echo = FALSE}
+```{r preliminaries, warning = FALSE, message = FALSE}
 
 # Packages
 
@@ -21,7 +21,7 @@ data <- "data/geog565_lab3_data.csv" %>% read_csv
 
 **1.1**
 
-```{r 1_1, echo = FALSE}
+```{r 1_1}
 
 # Plots
 
@@ -48,15 +48,15 @@ vis_1_1
 
 ```
 
--   The Commiphora shrubs are clustered over space: most points are close to a small subset of other points and far from all other points.
+-   The *Commiphora* shrubs are clustered over space: most points are close to a small subset of other points and far from all other points.
 
 -   The termite mounds are dispersed over space: most points share near-identical nearest-neighbor distances.
 
--   The Acacia senegal trees are randomly distributed over space: distances between points vary substantially with no clear pattern.
+-   The *Acacia senegal* trees are randomly distributed over space: distances between points vary substantially with no clear pattern.
 
 **1.2**
 
-```{r 1_2, warning = FALSE, message = FALSE, echo = FALSE}
+```{r 1_2, warning = FALSE, message = FALSE}
 
 dat_quads = 
   tibble(x = 
@@ -194,13 +194,13 @@ tab_1_2_chi =
   
 ```
 
-The following tables report statistics by group (e.g. Commiphora) for each quadrat count.
+The following tables report statistics by group (e.g. *Commiphora* shrubs) for each quadrat count.
 
-Column "j" indexes aggregations of x such that each j has a sum of x equal to or greater than 5.
+Column "*j*" indexes aggregations of *x* such that each *j* has a sum of *x* equal to or greater than 5.
 
-Columns "O~j~", "E~j~", and "Partial Chi-Squared" then report results for each j (with repetition).
+Columns "*O~j~*", "*E~j~*", and "Partial Chi-Squared" then report results for each *j* (with repetition).
 
-```{r 1_2_print_1, echo = FALSE}
+```{r 1_2_print_1}
 
 tab_1_2_1
 
@@ -213,7 +213,7 @@ tab_1_2_3
 
 The following table reports chi-squared values and tests of significance for each group.
 
-```{r 1_2_print_2, echo = FALSE}
+```{r 1_2_print_2}
 
 tab_1_2_chi
 
@@ -221,7 +221,7 @@ tab_1_2_chi
 
 **1.3**
 
-For each group, I am testing the null hypothesis of complete randomness by comparing the observed ch-squared to a critical value of the chi-squared distribution with reference to the available degrees of freedom and selected p-value. If the observed value is greater than the critical value, then I can reject the null hypothesis that the observed points are distributed by a homogeneous planar Poisson point process and thus that the points are distributed under complete randomness.
+For each group, I am testing the null hypothesis of complete randomness by comparing the observed chi-squared to a critical value of the chi-squared distribution with reference to the available degrees of freedom and selected *p*-value. If the observed value is greater than the critical value, then I can reject the null hypothesis that the observed points are distributed by a homogeneous planar Poisson point process and thus that the points are distributed under complete randomness.
 
 Column "Reject" in the preceding table reports the results of these comparisons as logical values.
 
@@ -229,11 +229,11 @@ Column "Reject" in the preceding table reports the results of these comparisons 
 
 Please refer to the preceding table for chi-squared values.
 
--   For Commiphora shrubs, I reject the null hypothesis.
+-   For *Commiphora* shrubs, I reject the null hypothesis.
 
 -   For termite mounds, I reject the null hypothesis.
 
--   For Acacia senegal trees, I cannot reject the null hypothesis.
+-   For *Acacia senegal* trees, I cannot reject the null hypothesis.
 
 Note that these results conform to the visual results in (1.1).
 
@@ -241,17 +241,15 @@ Note that these results conform to the visual results in (1.1).
 
 With reference to provided values for variance and lambda:
 
--   Commiphora shrubs are clustered.
+-   *Commiphora* shrubs are clustered.
 
 -   Termite mounds are dispersed.
 
--   Acacia senegal trees appear to be clustered, but our hypothesis testing suggests this is spurious.
+-   *Acacia senegal* trees appear to be clustered, but our hypothesis testing suggests this is spurious.
 
 **1.6**
 
 Quadrat analysis requires points that are given, not selected by the researcher, as well as sufficient observations for the chi-squared test. Quadrat analysis also requires the researcher to choose the grain, extent, and position of quadrats. That is, quadrat analysis cannot detect patterns at multiple scales and could suffer from edge effects at the boundaries of each quadrat.
-
-**EC.**
 
 **2.1**
 
@@ -353,7 +351,7 @@ Nearest-neighbor analysis requires points that are given, not selected by the re
 
 **3.1**
 
-```{r 3_1, eval = FALSE}
+```{r 3_1}
 
 par(mfrow = c(1, 3), bty = 'n')
 
@@ -410,90 +408,86 @@ The clustering of *Commiphora* shrubs appears to occur on a scale of around 0.25
 
 **4.1**
 
-How does the Ripley’s K second order analysis differ from the refined nearest neighbor analysis?
+RNN measures the CDF of NN distances, while Ripley's K second-order analysis counts pairs of points (not only nearest neighbors) occurring at different distances.
 
 **4.2**
 
-```{r 4_2, eval = FALSE}
+```{r 4_2, message = FALSE}
 
-############# COMMIPHORA 4. ################
+# Get plots for Ripley's K.
 
-# subset just the commiphora data
-data_subset_com <- subset(data, group == "commiphora")
+par(mfrow = c(1, 3), bty = 'n')
 
-# get the NN-distances histogram
-data.ppp <- ppp(data_subset_com$x, data_subset_com$y, window = owin(c(0,10), c(0,10)))
+ppp(data %>% filter(group == "commiphora") %>% pull(x), 
+    data %>% filter(group == "commiphora") %>% pull(y), 
+    window = owin(c(0, 10), c(0, 10))) %>% 
+  envelope(., 
+           fun = Kest, 
+           confidence = 0.95,
+           correction = "Ripley", 
+           var.approx = TRUE) %>% 
+  plot(main = 'commiphora')
 
-# run the Ripley's K second order analysis
-plot(envelope(data.ppp, fun=Kest, confidence = 0.95,
-              correction = "Ripley", var.approx = TRUE),
-     main = 'commiphora')
+ppp(data %>% filter(group == "termites") %>% pull(x), 
+    data %>% filter(group == "termites") %>% pull(y), 
+    window = owin(c(0, 10), c(0, 10))) %>% 
+  envelope(., 
+           fun = Kest, 
+           confidence = 0.95,
+           correction = "Ripley", 
+           var.approx = TRUE) %>% 
+  plot(main = 'termites')
 
-############# TERMITES 4. ################
+ppp(data %>% filter(group == "acacia") %>% pull(x), 
+    data %>% filter(group == "acacia") %>% pull(y), 
+    window = owin(c(0, 10), c(0, 10))) %>% 
+  envelope(., 
+           fun = Kest, 
+           confidence = 0.95,
+           correction = "Ripley", 
+           var.approx = TRUE) %>% 
+  plot(main = 'acacia')
 
-# subset just termites 
-data_subset_term <- subset(data, group == "termites")
-
-# get the NN-distances histogram
-data.ppp <- ppp(data_subset_term$x, data_subset_term$y, window = owin(c(0,10), c(0,10)))
-
-# run the Ripley's K second order analysis
-plot(envelope(data.ppp, fun=Kest, confidence = 0.95,
-              correction = "Ripley", var.approx = TRUE),
-     main = 'termites')
-
-
-############# ACACIA 4. ################
-
-# subset just acacia 
-data_subset_ac <- subset(data, group == "acacia")
-
-# get NN-distances histogram
-data.ppp <- ppp(data_subset_ac$x, data_subset_ac$y, window = owin(c(0,10), c(0,10)))
-
-# run Ripley's K second order analysis
-plot(envelope(data.ppp, fun=Kest, confidence = 0.95,
-              correction = "Ripley", var.approx = TRUE),
-     main = 'Acacia')
+par(mfrow = c(1, 1))
 
 ```
 
-Plot the Ripley’s K function, L(r), as a function of d (lag distance) for each dataset. Insert these plots into your lab submission. Describe, in your own words, what L(r) and r represent.
+*r* (or *d* in other notation) is a variable radius or distance as in RNN. *L(r)* counts pairs of points at different distances and transforms the result with the area, sample size, and correction for handling distances over the circle defined by *r* on a two-dimensional plane. This avoids problems with heterogeneity and edge effects inherent to quadrat analysis, NN, and RNN.
 
 **4.3**
 
-Interpret the point patterns based on the curves in the Ripley’s K plots by comparing the results to the envelope for the null hypothesis (Complete Spatial Randomness, CSR). Explain how the CSR envelope is constructed, and how it helps you interpret the significance of pattern based on the Ripley’s K plot.
+The 0.95 confidence interval envelope for the null hypothesis of complete randomness is drawn from a subset of Monte Carlo simulations of the data under complete randomness. That is, the envelope captures the *r*-*L(r)* distributions that are most likely to occur under complete randomness. So, comparison of the observed distributions to the envelope of simulated distribution indicates the likelihood of the observed distribution occurring under complete randomness. The difference of integrals over values of *r* indicates whether an observed distribution is clustered or dispersed relative to complete randomness.
+
+With that, we can note that *Commiphora* shrubs are clustered and (by visual comparison only) that clustering appears to be significant. Termite mounds are dispersed and that dispersal appears to be significant. *Acacia senegal* trees are not clearly clustered or dispersed and it appears that complete randomness holds in their distribution.
 
 **4.4**
 
-What can you say about the scale of patterns for the three species? Are there multiple scales of patterns?
+The difference in *L(r)* distributions for each plot suggests that *Commiphora* shrubs are clustered at scales from 0.25 to 2.00 units of distance, termites are dispersed at distances of up to 0.75 units of distance, and *Acacia senegal* trees have no interpretable scale of pattern.
 
 **4.5**
 
-What benefits do Refined Nearest Neighbor and Ripley’s K analyses offer over conducting a quadrat and nearest neighbor analysis?
+Both RNN and Ripley's K reveal patterns across the entire distribution of spatial relationships in a sample, so that both methods support analysis of multiple scales of pattern. Ripley's K has the additional advantages of correcting for heterogeneity and edge effects.
 
 **5.1.a**
 
-(See .pdf.)
-
-Bruce and Tom have data showing the locations of West Nile virus infected populations of birds, tire dumps, and natural wetlands. West Nile virus is transmitted through mosquito bites, and mosquitos breed in quiet water. Their questions are: What is the spatial pattern of West Nile infections? and;
+Bruce and Tom could use any of the point pattern analysis methods we have examined to investigate the spatial pattern of infections. RNN might be useful in revealing the distances or scales that the infection spreads over.
 
 **5.1.b.**
 
-Are tire dumps and/or natural wetlands associated with West Nile infections?
+Bruce and Tom could use Ripley's K to relate their point pattern of interest to another point variable in a bivariate point pattern analysis.
 
 **5.2.a**
 
-Laurie has conducted surveys of exotic plant occurrences along roads. For each 0.2 km section of road, she has noted the presence/absence of each of eight common exotic plant species. For each road segment, she also knows the elevation, aspect, age of the road, and usage level of the road. Her questions are: What are the spatial patterns of exotic plants along roads?, and;
+Laurie's survey appears to have created 1-dimensional quadrats along transects (unless we add some assumptions about the arrangement of roads or Laurie's imputation of roadside observations to locations further from roads). Since she does not observe the actual points of plant presence/absence, no point pattern analysis method except quadrat analysis could be appropriate, and that would require adaptation of the quadrat methods discussed here to the 1-dimensional transect setting.
 
 **5.2.b**
 
-What factors are associated with the spatial pattern of exotic plants along roads?
+I do not see an appropriate application of point pattern analysis methods to the association of spatial patterns of exotic plants in a quadrat format with other variables.
 
 **5.3.a**
 
-Shira has created a dataset showing the locations of conflicts over water resources, as well as the basin boundaries, nearby cities and their populations, and socioeconomic data. Her questions are: What is the spatial pattern of water resource conflicts? and;
+Shira could use NN and/or RNN analysis of locations of conflicts to identify a univariate spatial pattern of conflicts.
 
-**5.2.b**
+**5.3.b**
 
-What factors are associated with water resource conflicts?\
+Shira could code conflicts by their distance from basin boundaries, from cities, or by features of the nearest basin and/or city, and then develop a Ripley's K second-order analysis on bivariate data.\
