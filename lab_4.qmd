@@ -1,11 +1,11 @@
 ---
-title: "Lab 4"
+title: "Lab 4 | GEOG 565"
 author: "Andrew Steinkruger"
-format: html
+format: pdf
 editor: visual
 ---
 
-```{r preliminaries, warning = FALSE, message = FALSE}
+```{r preliminaries, echo = FALSE, warning = FALSE, message = FALSE}
 
 # Packages
 
@@ -14,6 +14,7 @@ library(ncf)
 library(plotly) 
 library(sp) 
 library(tidyverse) 
+library(gt)
 
 # Data
 
@@ -21,34 +22,158 @@ data <- "data/geog565_lab4_data.csv" %>% read_csv
 
 ```
 
-**1**
+**1.**
 
 ```{r 1, echo = FALSE}
 
-# import the dataset
-data = read.csv("data/geog565_lab4_data.csv")
+# Commenting out plotly to avoid errors in rendering to .pdf.
 
-# create 2d contour plot in ggplot
-v.2D <- plot_ly(data, x = ~long, y = ~lat, z = ~alt,
-                type = "contour", 
-                contours = list(showlabels = TRUE)
-                )
-v.2D
+# v.2D <- plot_ly(data, x = ~long, y = ~lat, z = ~alt,
+#                 type = "contour", 
+#                 contours = list(showlabels = TRUE))
+# v.2D
 
 
-# Create 3d plots 
-z.3D <- as.matrix(data[,2:4] %>%
-                    pivot_wider(names_from = long, values_from = alt) %>% 
-                    select(!(lat)) )
-
-v.3D <- plot_ly(z=z.3D) %>% 
-  add_surface(contours = list(z = list(show=TRUE, 
-                                       usecolormap=TRUE, 
-                                       highlightcolor="#ff0000",
-                                       project=list(z=TRUE))))
-
-v.3D
+# z.3D <- as.matrix(data[,2:4] %>%
+#                     pivot_wider(names_from = long, values_from = alt) %>% 
+#                     select(!(lat)) )
+# 
+# v.3D <- plot_ly(z=z.3D) %>% 
+#   add_surface(contours = list(z = list(show=TRUE, 
+#                                        usecolormap=TRUE, 
+#                                        highlightcolor="#ff0000",
+#                                        project=list(z=TRUE))))
+# 
+# v.3D
 
 ```
 
+![](out/lab_4_1_a.png){fig-align="center" width="3.25in"}
+
+![](out/lab_4_1_b.png){fig-align="center" width="3.25in"}
+
 To work with simple variograms and correlograms, we assume stationarity and isotropy. However, inspecting both plots suggests that the Coast Range declines toward the coast and that watersheds systematically carve the terrain across the region of interest. Both of these patterns could violate assumptions of stationarity and isotropy.
+
+{{< pagebreak >}}
+
+**2.**
+
+**a.**
+
+```{r 2a, echo = FALSE}
+
+coordinates(data) <- ~ long + lat 
+
+g <- variogram(alt ~ 1, data = data) 
+
+plot(g)
+
+```
+
+**b-c.**
+
+```{r 2bc, echo = FALSE}
+
+g.dir <- variogram(alt ~ 1, data = data, alpha = c(0, 90)) 
+
+plot(g.dir)
+
+```
+
+{{< pagebreak >}}
+
+**d.**
+
+```{r 2d, echo = FALSE, warning = FALSE, message = FALSE}
+
+# Get nugget, sill, and range.
+
+g.dir %>% 
+  group_by(dir.hor, dir.ver) %>% 
+  summarize(nugget = min(gamma),
+            sill = max(gamma),
+            range = max(dist)) %>% 
+  ungroup %>% 
+  rename('Direction (X)' = dir.hor,
+         'Direction (Y)' = dir.ver,
+         Nugget = nugget,
+         Sill = sill,
+         Range = range) %>% 
+  mutate(across(everything(), ~ round(.x, 0))) %>% 
+  gt %>% 
+  tab_options(latex.use_longtable = TRUE)
+
+```
+
+We can observe that the nugget for the N-S directional semi-variogram (I'll use "variogram" for readability) is greater than that of the E-W variogram, suggesting there is more variation finer than the grain of our data in the N-S direction than in the E-W direction. By contrast, the plots suggest the sill for the N-S variogram is less than that of the E-W variogram; further, the E-W variogram does not clearly show a sill, since the variogram is not obviously leveling off as we reach the maximum observable lag distance on the x-axis. In any case, the N-S direction appears to have a lower maximum variance than the E-W direction. Finally, range is ambiguous in both plots since semivariance continues to change along the x-axis up to the maximum observable lag distance. We might infer that autocorrelation in these elevation data continues to decrease beyond our spatial extent, which seems about right for the Coast Range.
+
+**3.**
+
+```{r 3, echo = FALSE}
+
+g.fit <- fit.variogram(g, 
+                       model = 
+                         (vgm(psill = 14000, 
+                              model = "Sph", 
+                              range = 2000, 
+                              nugget = 100)))
+
+g.fit.linear <- fit.variogram(g, 
+                       model = 
+                         (vgm(psill = 14000, 
+                              model = "Lin", 
+                              range = 2000, 
+                              nugget = 100)))
+
+bind_rows(g.fit, g.fit.linear) %>% 
+  as_tibble %>% 
+  select(model, psill, range) %>% 
+  rename(Result = model, Sill = psill, Range = range) %>% 
+  mutate(Model_Fit = c("Spherical", "Spherical", "Linear", "Linear")) %>% 
+  relocate(Model_Fit) %>% 
+  mutate(across(c(Sill, Range), ~ round(.x, 0))) %>% 
+  gt %>% 
+  tab_options(latex.use_longtable = TRUE)
+
+
+```
+
+We can infer from the directional semi-variogram plots that the spherical fit is reasonable and the linear fit is not useful.
+
+**4.**
+
+**a.**
+
+The directional semi-variograms suggest there is a pattern of increasing semivariance over lag distance and thus decreasing autocorrelation over lag distance. The N-S variogram indicates some non-monotonic pattern in variance over lag distance, which corresponds to the large-scale valleys and ridges shown in (1). The E-W variogram indicates anisotropy as elevations fall from inland locations toward the coast, which also corresponds to the trend in elevations from east to west in (1).
+
+{{< pagebreak >}}
+
+**b.**
+
+The anisotropy shown in the E-W directional semi-variogram violates our generic assumption of isotropy. The shape of the N-S variogram could violate stationarity, as local features disrupt the regional trend in semi-variance. We could use spectral analysis to identify trends, for example the E-W trend in elevation, to filter out of elevations so that we have plausibly isotropic data.
+
+**5.**
+
+```{r 5, echo = FALSE}
+
+fit1 <- 
+  correlog(data$long, 
+           data$lat, 
+           data$alt, 
+           increment = 2, 
+           resamp = 10,
+           quiet = TRUE) 
+plot(fit1, type='l')
+abline(h=0, col='red')
+
+```
+
+The correlogram implies similarities over space at intervals (in terms of mean-of-class distances) of 10,000 units, suggesting some recurring spatial pattern over that distance – here, we might expect that to be the valley-ridge patterns running from south to north. We can also observe some variation at shorter intervals (2000-4000, 6000-8000) that might capture local patterns of river carving or other landscape features of interest.
+
+**6.**
+
+There is no confidence interval in the correlogram with the provided code and I'm stumped by relevant package documentation. Alternatively, I'm missing an important detail for interpretating the correlogram. But we have that confidence intervals for correlograms are created with Monte Carlo simulations.
+
+**7.**
+
+I would want to conduct spectral analysis on these data to parse out watersheds running from east to west. However, it is not obvious to me that these patterns repeat often enough for spectral analysis.
