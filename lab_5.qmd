@@ -1,0 +1,23 @@
+---
+title: "Lab 5 | GEOG 565"
+author: "Andrew Steinkruger"
+format: pdf
+editor: visual
+---
+
+```{r preliminaries, warning = FALSE, message = FALSE}
+
+# Packages
+
+# Data
+
+
+```
+
+**1.**
+
+```{r 1}
+
+
+
+```
