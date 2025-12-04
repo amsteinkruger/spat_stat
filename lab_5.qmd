@@ -5,19 +5,73 @@ format: pdf
 editor: visual
 ---
 
+Draw a fractal with one recursion, then three.
+
 ```{r preliminaries, warning = FALSE, message = FALSE}
 
 # Packages
 
-# Data
-
+library(tidyverse)
+library(patchwork)
+library(ggpubr)
+library(alphahull)
 
 ```
 
-**1.**
-
 ```{r 1}
 
+vis_koch_2 = 
+  koch(side = 3, niter = 2) %>% 
+  as.data.frame %>% 
+  bind_rows(., slice_head(.)) %>% 
+  ggplot() + 
+  geom_path(aes(x = V1, 
+                y = V2)) +
+  theme_void()
 
+ggsave("out/vis_koch_2.png",
+       vis_koch_2,
+       dpi = 300,
+       width = 2,
+       height = 2.33)
+
+```
+
+```{r 3}
+
+vis_koch_2 = 
+  koch(side = 3, niter = 2) %>% 
+  as.data.frame %>% 
+  bind_rows(., slice_head(.)) %>% 
+  ggplot() + 
+  geom_path(aes(x = V1, 
+                y = V2)) +
+  theme_void()
+
+vis_koch_3 = 
+  koch(side = 3, niter = 3) %>% 
+  as.data.frame %>% 
+  bind_rows(., slice_head(.)) %>% 
+  ggplot() + 
+  geom_path(aes(x = V1, 
+                y = V2)) +
+  theme_void()
+
+vis_koch_4 = 
+  koch(side = 3, niter = 4) %>% 
+  as.data.frame %>% 
+  bind_rows(., slice_head(.)) %>% 
+  ggplot() + 
+  geom_path(aes(x = V1, 
+                y = V2)) +
+  theme_void()
+
+vis_koch_patch = vis_koch_2 + vis_koch_3 + vis_koch_4 + coord_fixed()
+
+ggsave("out/vis_koch_patch.png",
+       vis_koch_patch,
+       dpi = 300,
+       width = 6,
+       height = 2.33)
 
 ```

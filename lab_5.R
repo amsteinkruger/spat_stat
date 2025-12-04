@@ -1,17 +1,17 @@
-#PART 1
+# PART 1
 
-#installpackages
-install.packages(c("sp", "fractaldim", "gstat")) # Run once to install
+# install packages
+# install.packages(c("sp", "fractaldim", "gstat")) # Run once to install
 
 library(fractaldim)
 library(sp)
 library(gstat)
 
 # Set the working directory
-setwd("R:/2024/Fall/GEOG565/Instructors/Lab 5")
+# setwd("R:/2024/Fall/GEOG565/Instructors/Lab 5")
 
 # Read in the dataset
-data5 <- read.csv("R:/2024/Fall/GEOG565/Instructors/Lab 5/data/Lab5data.csv")
+data5 <- read.csv("data/Lab5data.csv")
 
 # Extract columns from the dataset as vectors
 location = data5$location
@@ -20,6 +20,9 @@ species.count = data5$species.count
 soil = data5$soil
 
 # Plot the original data
+
+par(mfrow = c(1, 3))
+
 plot(x=location, y=intensity, xlab = "Location (distance m)", 
      ylab = "watts/m2", main = "Light Intensity", type="l")
 
@@ -28,6 +31,8 @@ plot(x=location, y=soil, xlab = "Location (distance m)",
 
 plot(x=location, y=species.count, xlab = "Location (distance m)", 
      ylab = "Number of Species", main = "Soil fauna", type="l")
+
+par(mfcol = c(1, 1))
 
 # Spectral frequency for light intensity
 x.spec1 <- spectrum(intensity, log="no", span=9, plot=FALSE)
@@ -75,6 +80,7 @@ legend(list(x = 0.4,y = 50000),
 
 # Create the Cross-Correlogram
 #ccf(intensity,species.count,lag.max=150,plot=FALSE)
+
 plot(ccf(intensity, species.count, lag.max=150, plot=FALSE),type="l",col="red", ylab="Cross-Correlation",
      main="Cross-Correlogram", xlim=c(0,150))
 
@@ -85,10 +91,11 @@ coordinates(datavar) <- ~location+loc2
 g <- gstat(formula = datavar$intensity~datavar$species.count, data = datavar)
 plot(variogram(g), main="Cross-Variogram")
 
-
-
 #PART 3
 # Run some Fractal dimension analysis
+
+par(mfrow = c(1, 3))
+
 fd_intensity <- fd.estim.variogram(intensity, nlags = 60, plot.loglog = TRUE, 
                                    plot.allpoints = TRUE, legend.type = 'f', 
                                    main = 'Light intensity log-log plot')
@@ -100,6 +107,8 @@ fd_soil <- fd.estim.variogram(soil, nlags = 60, plot.loglog = TRUE,
 fd_insects <- fd.estim.variogram(species.count, nlags = 60, plot.loglog = TRUE, 
                                  plot.allpoints = TRUE, legend.typ = 'f',
                                  main = 'Number of Species log-log plot')
+
+par(mfrow = c(1, 1))
 
 # Get the slope from each model
 fd_intensity$loglog[1]
